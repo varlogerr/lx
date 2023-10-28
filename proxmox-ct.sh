@@ -96,6 +96,10 @@
   DEFAULT_CT_CONF[after]=''
 # {{/ DEFAULT_BLOCK }}
 
+declare CT_CONFDIR=/etc/pve/lxc
+declare TPLS_URL=http://download.proxmox.com/images/system
+declare SELF; SELF="${BASH_SOURCE[0]}"
+
 print_help() {
   declare the_tool; the_tool="$(basename -- "${0}")"
 
@@ -110,13 +114,98 @@ print_help() {
 }
 
 conf_self() {
-  :
+  [[ $# -gt 0 ]] || return 1
+
+  declare SUFFIX; SUFFIX="_${1}"
+  SUFFIX="${SUFFIX^^}"
+
+  declare self_txt; self_txt="$(cat -- "${SELF}")"
+  declare self_lines; self_lines="$(wc -l <<< "${self_txt}")"
+
+  # Get default and custom configuration blocks
+  declare -A BLOCK=([default]=DEFAULT_BLOCK [custom]=CONFBLOCK)
+  declare offset
+  declare ix; for ix in "${!BLOCK[@]}"; do
+    BLOCK["${ix}"]="$(set -o pipefail
+      grep -x -m1 -A"${self_lines}" '\s*#\s*{{\s*'"${BLOCK[$ix]}"'\s*}}\s*' \
+      <<< "${self_txt}" \
+      | grep -x -m1 -B"${self_lines}" '\s*#\s*{{\/\s*'"${BLOCK[$ix]}"'\s*}}\s*' \
+      | sed -e '1 d' -e '$ d'
+    )" || {
+      echo "Can't detect default confblock" >&2
+      return 1
+    }
+
+    # Remove offset
+    offset="$(head -n 1 <<< "${BLOCK[$ix]}" | grep -o '^\s*')"
+    # shellcheck disable=SC2001
+    BLOCK["${ix}"]="$(sed 's/^'"${offset}"'//' <<< "${BLOCK[$ix]}")"
+  done
+
+  # Remove 'DEFAULT_' prefix from vars
+  # shellcheck disable=SC2001
+  BLOCK[default]="$(sed \
+    -e 's/^\(\s*declare\(\s\+.\+\)*\s\+\)DEFAULT_/\1/' \
+    -e 's/^\(\s*\)DEFAULT_/\1/' <<< "${BLOCK[default]}"
+  )"
+
+  # Append SUFFIX to vars
+  declare suffix_esc; suffix_esc="$(
+    sed -e 's/[]\/$*.^[]/\\&/g' <<< "${SUFFIX}"
+  )"
+  # shellcheck disable=SC2001
+  BLOCK[default]="$(sed \
+    -e 's/^\(\s*[^#[]\+\)\[/\1'"${suffix_esc}"'[/' \
+    -e 's/^\(\s*declare\s[^=]\+\)$/\1'"${suffix_esc}"'/' <<< "${BLOCK[default]}"
+  )"
+
+  declare -A VARS
+  declare k v; for k in "${!BLOCK[@]}"; do
+    v="${BLOCK[$k]}"
+
+    VARS["${k}"]="$(
+      # shellcheck disable=SC2046
+      unset -v $(compgen -v | grep -vx 'v') &>/dev/null
+      # shellcheck disable=SC1090
+      . <(printf -- '%s\n' "${v}")
+      unset v
+      set -o posix ; set | /usr/bin/env grep '^\(TARGET\|CT_CONF_.*\)='
+    )"
+  done
+
+  grep -q '^TARGET=' <<< "${VARS[custom]}" || {
+    BLOCK[custom]="$(
+      grep '^TARGET=' <<< "${VARS[default]}"
+    )${BLOCK[custom]:+$'\n\n'}${BLOCK[custom]}"
+  }
+
+  grep -q "$(
+    grep -o '^CT_CONF_[^=]*' <<< "${VARS[default]}"
+  )" <<< "${VARS[custom]}" || {
+    BLOCK[custom]="${BLOCK[custom]}"$'\n'"$(
+      grep -v '^declare\s\+TARGET=' <<< "${BLOCK[default]}"
+    )"
+  }
+
+  # Get confblock position
+  declare pos_txt; pos_txt="$(set -o pipefail
+    grep -n -x -m1 -A"${self_lines}" '\s*#\s*{{\s*CONFBLOCK\s*}}\s*' \
+      <<< "${self_txt}" \
+    | grep -x -m1 -B"${self_lines}" '[0-9]\+-\s*#\s*{{\/\s*CONFBLOCK\s*}}\s*'
+  )"
+  declare -A CONFBLOCK_POS; CONFBLOCK_POS=(
+    [start]="$(head -n 1 <<< "${pos_txt}" | grep -o '^[0-9]\+')"
+    [end]="$(tail -n 1 <<< "${pos_txt}" | grep -o '^[0-9]\+')"
+  )
+
+  (
+    head -n "${CONFBLOCK_POS[start]}" <<< "${self_txt}"
+    # shellcheck disable=SC2001
+    sed -e 's/^/  /' -e 's/^\s*$//' <<< "${BLOCK[custom]}"
+    tail -n +"${CONFBLOCK_POS[end]}" <<< "${self_txt}"
+  ) | tee -- "${SELF}" >/dev/null; exit
 }
 
-declare -A OPTS=(
-  [help]=false
-  [conf]=false
-)
 _iife_opts() {
   while [[ -n "${1+x}" ]]; do
     case "${1}" in
@@ -127,11 +216,6 @@ _iife_opts() {
     shift
   done
 }; _iife_opts "${@}"; unset
-
-
-declare CT_CONFDIR=/etc/pve/lxc
-declare TPLS_URL=http://download.proxmox.com/images/system
-declare SELF; SELF="${BASH_SOURCE[0]}"
 
 _ct_conf_update() {
   declare -a updates=("${@}")
