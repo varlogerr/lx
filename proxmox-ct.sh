@@ -1,79 +1,100 @@
 #!/usr/bin/env bash
 
-{ # {{ CONFBLOCK }}
+# {{ CONFBLOCK }}
   declare DEST=root@192.168.69.5
 
-  declare -A CT_CONF_AXWAY_INT1; CT_CONF_AXWAY_INT1=(
-    #
-    # Init only
-    #
-    [template]='almalinux-8'  # List: http://download.proxmox.com/images/system
-    [id]=131
-    [unprivileged]=0
-    [password]='changeme'
-    [storage]='S1TB'
-    #
-    # Changeable
-    #
-    [hostname]='int1.axway.vm'
-    [onboot]=1                # Example: '0' or '1'
-    [cores]='2'               # Example: '1' or '69'
-    [memory]='2048'           # Example: '512'
-    [disk]='10G'              # Example: '8G'
-    [gateway]='192.168.69.1'  # Example: '192.168.0.1'
-    [ip]='192.168.69.31/24'   # Example: '192.168.0.10/24'
-    [dev_net]=1               # Mount dev/net, vpn friendly. Example: '0' or '1'
-    [after]='
-      install_goodies
-      install_ssh
-      install_gp_client
-      install_apiportal_stack
-    '
-  )
+  declare -A CT_CONF_AXWAY_INT1
+  ##################
+  #### Required ####
+  ##################
+  # Required conf works only on container creation
+  #
+  # List: http://download.proxmox.com/images/system
+  CT_CONF_AXWAY_INT1[template]='almalinux-8'
+  CT_CONF_AXWAY_INT1[id]=131
+  # Use '0' for alternative to 'docker' preset
+  CT_CONF_AXWAY_INT1[unprivileged]=1
+  # CT root password
+  CT_CONF_AXWAY_INT1[password]='changeme'
+  CT_CONF_AXWAY_INT1[storage]='S1TB'
+  ##################
+  #### Optional ####
+  ##################
+  CT_CONF_AXWAY_INT1[hostname]='int1.axway.vm'
+  # Example: '0' or '1'
+  CT_CONF_AXWAY_INT1[onboot]=1
+  # From PVE defaults by default
+  CT_CONF_AXWAY_INT1[cores]='2'
+  # From PVE defaults by default. Example: '512'
+  CT_CONF_AXWAY_INT1[memory]='2048'
+  # From PVE defaults by default. Example: '8G'
+  CT_CONF_AXWAY_INT1[disk]='10G'
+  # Example: '192.168.0.1'
+  CT_CONF_AXWAY_INT1[gateway]='192.168.69.1'
+  # Example: '192.168.0.10/24'
+  CT_CONF_AXWAY_INT1[ip]='192.168.69.31/24'
+  # VPN server ready preset. Example: '0' or '1'
+  CT_CONF_AXWAY_INT1[vpn]=1
+  # Docker ready preset, better than privileged. Example: '0' or '1'
+  CT_CONF_AXWAY_INT1[docker]=1
+  # After hooks, one hook function per line. Launched in the container
+  CT_CONF_AXWAY_INT1[after]='
+    install_goodies
+    install_ssh
+    install_gp_client
+    install_apiportal_stack
+  '
 
   install_goodies() (set -x; curl --fail -kL "https://raw.githubusercontent.com/varlogerr/lx/master/scripts/install-goodies.sh" | bash)
   install_ssh() (set -x; curl --fail -kL "https://raw.githubusercontent.com/varlogerr/lx/master/scripts/install-ssh.sh" | bash)
   install_gp_client() (set -x; curl --fail -kL "https://raw.githubusercontent.com/varlogerr/lx/master/scripts/install-gp-client.sh" | bash)
   install_apiportal_stack() (set -x; curl --fail -kL "https://raw.githubusercontent.com/varlogerr/lx/master/scripts/install-apiportal-stack.sh" | bash)
-} # {{/ CONFBLOCK }}
+# {{/ CONFBLOCK }}
 
 ################
 #### ACTION ####
 ################
 
-{ # {{ DEMOBLOCK }}
-  #
-  # Copy this block, remove 'DEMO_' prefix and add
-  # suffix
-  #
+# {{ DEFAULT_BLOCK }}
+  declare DEFAULT_TARGET='root@192.168.0.5'
 
-  # Target machine
-  declare DEMO_DEST=root@192.168.0.5
-
-  declare -A DEMO_CT_CONF; DEMO_CT_CONF=(
-    #
-    # Init only
-    #
-    [template]='ubuntu-22.04' # List: http://download.proxmox.com/images/system
-    [id]=110
-    [unprivileged]=1          # Use '0' for alternative to 'docker' preset
-    [password]='changeme'
-    [storage]='local-lvm'
-    #
-    # Changeable
-    #
-    [hostname]='demo'
-    [onboot]=0                # Example: '0' or '1'
-    [cores]=''                # Example: '1' or '69'
-    [memory]=''               # Example: '512'
-    [disk]=''                 # Example: '8G'
-    [gateway]=''              # Example: '192.168.0.1'
-    [ip]=''                   # Example: '192.168.0.10/24'
-    [dev_net]=0               # Mount dev/net. Example: '0' or '1'
-    [docker]=0                # Docker ready, better than privileged. Example: '0' or '1'
-    [after]=''                # After hooks, one hook script per line. Launched in the container
-  )
-} # {{/ DEMOBLOCK }}
+  declare -A DEFAULT_CT_CONF
+  ##################
+  #### Required ####
+  ##################
+  # Required conf works only on container creation
+  #
+  # List: http://download.proxmox.com/images/system
+  DEFAULT_CT_CONF[template]='ubuntu-22.04'
+  DEFAULT_CT_CONF[id]=110
+  # Use '0' for alternative to 'docker' preset
+  DEFAULT_CT_CONF[unprivileged]=1
+  # CT root password
+  DEFAULT_CT_CONF[password]='changeme'
+  DEFAULT_CT_CONF[storage]='local-lvm'
+  ##################
+  #### Optional ####
+  ##################
+  DEFAULT_CT_CONF[hostname]='demo'
+  # Example: '0' or '1'
+  DEFAULT_CT_CONF[onboot]=0
+  # From PVE defaults by default
+  DEFAULT_CT_CONF[cores]=''
+  # From PVE defaults by default. Example: '512'
+  DEFAULT_CT_CONF[memory]=''
+  # From PVE defaults by default. Example: '8G'
+  DEFAULT_CT_CONF[disk]=''
+  # Example: '192.168.0.1'
+  DEFAULT_CT_CONF[gateway]=''
+  # Example: '192.168.0.10/24'
+  DEFAULT_CT_CONF[ip]=''
+  # VPN server ready preset. Example: '0' or '1'
+  DEFAULT_CT_CONF[vpn]=0
+  # Docker ready preset, better than privileged. Example: '0' or '1'
+  DEFAULT_CT_CONF[docker]=0
+  # After hooks, one hook function per line. Launched in the container
+  DEFAULT_CT_CONF[after]=''
+# {{/ DEFAULT_BLOCK }}
 
 declare CT_CONFDIR=/etc/pve/lxc
 declare TPLS_URL=http://download.proxmox.com/images/system
@@ -114,10 +135,10 @@ _ct_conf_update() {
   | (set -x; tee -- "${CONFFILE}") >/dev/null
 }
 
-ct_conf_devnet() {
-  [[ ${THE_CONF[dev_net]} -gt 0 ]] || return 0
+ct_preset_vpn() {
+  [[ ${THE_CONF[vpn]} -gt 0 ]] || return 0
 
-  _log_info 'Mount /dev/net'
+  _log_info 'VPN preset'
 
   # https://pve.proxmox.com/wiki/OpenVPN_in_LXC
   _ct_conf_update "
@@ -314,14 +335,14 @@ main() {
     eval "$(declare -pA "${v}" | sed 's/^[^=]\+/THE_CONF/')"
 
     # Configure defaults
-    for conf_key in "${!DEMO_CT_CONF[@]}"; do
-      THE_CONF["${conf_key}"]="${THE_CONF[${conf_key}]:-${DEMO_CT_CONF[${conf_key}]}}"
+    for conf_key in "${!DEFAULT_CT_CONF[@]}"; do
+      THE_CONF["${conf_key}"]="${THE_CONF[${conf_key}]:-${DEFAULT_CT_CONF[${conf_key}]}}"
     done
 
     ct_create \
     && {
       ct_conf_basic
-      ct_conf_devnet
+      ct_preset_vpn
       ct_conf_docker
       ct_after_hooks
     }
