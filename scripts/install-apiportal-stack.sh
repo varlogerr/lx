@@ -27,31 +27,3 @@ declare php_v_rex; php_v_rex="$(sed 's/\./\\./' <<< "${PHP_V}")"
 
 echo "LoadModule mpm_prefork_module modules/mod_mpm_prefork.so" \
 | (set -x; tee /etc/httpd/conf.modules.d/*mpm.conf >/dev/null)
-
-create_user() {
-  declare user="${1}"
-  declare password; password="${2-$(timeout 1 cat -)}"
-
-  [[ (-n "${user}" && -n "${password}")]] || {
-    echo "USAGE:" >&2
-    echo "  ${0} USER PASSWORD" >&2
-    echo "  ${0} USER <<< PASSWORD" >&2
-    exit 2
-  }
-
-  mariadb -uroot <<< "
-    CREATE USER '${user}'@'localhost' IDENTIFIED BY '${password}';
-    CREATE USER '${user}'@'%' IDENTIFIED BY '${password}';
-    GRANT ALL PRIVILEGES ON *.* TO '${user}'@'localhost' WITH GRANT OPTION;
-    GRANT ALL PRIVILEGES ON *.* TO '${user}'@'%' WITH GRANT OPTION;
-    FLUSH PRIVILEGES;
-  "
-}
-
-mkdir -p ~/bin
-(set -x; touch ~/bin/db-mkuser.sh && chmod +x ~/bin/db-mkuser.sh)
-(set -x; {
-  declare -f create_user
-  # shellcheck disable=SC2016
-  echo 'create_user "${@}"'
-} | tee ~/bin/db-mkuser.sh >/dev/null)

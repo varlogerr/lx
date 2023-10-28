@@ -262,9 +262,7 @@ ct_after_hooks() {
   declare name; for name in "${HOOKS_ORDERED[@]}"; do
     [[ -n "${NAME2DEF[$name]}" ]] || continue
 
-    _log_info
-    _log_info "#### HOOK: ${name} ####"
-    _log_info
+    _log_info; _log_info "#### HOOK: ${name} ####"; _log_info
     printf -- '%s; %s' "${NAME2DEF[$name]}" "${name}" \
     | (set -x; pct exec "${THE_CONF[id]}" bash)
   done
