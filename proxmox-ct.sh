@@ -100,6 +100,14 @@ declare CT_CONFDIR=/etc/pve/lxc
 declare TPLS_URL=http://download.proxmox.com/images/system
 declare SELF; SELF="${BASH_SOURCE[0]}"
 
+_log_info() { printf -- "$(basename -- "${0}")"' [%s]: %s\n' INFO "${1}" >&2; }
+_log_warn() { printf -- "$(basename -- "${0}")"' [%s]: %s\n' WARN "${1}" >&2; }
+_log_fuck() { printf -- "$(basename -- "${0}")"' [%s]: %s\n' FUCK "${1}" >&2; }
+
+# https://stackoverflow.com/a/2705678
+_escape_sed_expr()  { sed -e 's/[]\/$*.^[]/\\&/g' <<< "${1-$(cat)}"; }
+_escape_sed_repl()  { sed -e 's/[\/&]/\\&/g' <<< "${1-$(cat)}"; }
+
 print_help() {
   declare the_tool; the_tool="$(basename -- "${0}")"
 
@@ -114,7 +122,10 @@ print_help() {
 }
 
 conf_self() {
-  [[ $# -gt 0 ]] || return 1
+  [[ $# -gt 0 ]] || {
+    _log_fuck "SUFFIX is required."
+    return 1
+  }
 
   declare SUFFIX; SUFFIX="_${1}"
   SUFFIX="${SUFFIX^^}"
@@ -419,14 +430,6 @@ run_self_remotely() {
 
   exit 0 # {{ IS_LOCAL=true /}}
 }
-
-_log_info() { printf -- 'proxmox-ct.sh [%s]: %s\n' INFO "${1}" >&2; }
-_log_warn() { printf -- 'proxmox-ct.sh [%s]: %s\n' WARN "${1}" >&2; }
-_log_fuck() { printf -- 'proxmox-ct.sh [%s]: %s\n' FUCK "${1}" >&2; }
-
-# https://stackoverflow.com/a/2705678
-_escape_sed_expr()  { sed -e 's/[]\/$*.^[]/\\&/g' <<< "${1-$(cat)}"; }
-_escape_sed_repl()  { sed -e 's/[\/&]/\\&/g' <<< "${1-$(cat)}"; }
 
 main() {
   run_self_remotely
