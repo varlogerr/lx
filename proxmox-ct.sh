@@ -217,17 +217,6 @@ conf_self() {
   ) | tee -- "${SELF}" >/dev/null; exit
 }
 
-_iife_opts() {
-  while [[ -n "${1+x}" ]]; do
-    case "${1}" in
-      -\?|-h|--help ) print_help; exit ;;
-      conf          ) shift; conf_self "${@}"; exit ;;
-    esac
-
-    shift
-  done
-}; _iife_opts "${@}"; unset _iife_opts
-
 _ct_conf_update() {
   declare -a updates=("${@}")
   declare CONFFILE="${CT_CONFDIR}/${THE_CONF[id]}.conf"
@@ -431,7 +420,20 @@ run_self_remotely() {
   exit 0 # {{ IS_LOCAL=true /}}
 }
 
+_trap_opts() {
+  while [[ -n "${1+x}" ]]; do
+    case "${1}" in
+      -\?|-h|--help ) print_help; exit ;;
+      conf          ) shift; conf_self "${@}"; exit ;;
+    esac
+
+    shift
+  done
+}
+
 main() {
+  _trap_opts "${@}"
+
   run_self_remotely
 
   declare tmp; tmp="$(
@@ -469,4 +471,4 @@ main() {
   done
 }
 
-main
+main "${@}"
