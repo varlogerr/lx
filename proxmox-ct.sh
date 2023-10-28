@@ -423,16 +423,18 @@ run_self_remotely() {
 _trap_opts() {
   while [[ -n "${1+x}" ]]; do
     case "${1}" in
-      -\?|-h|--help ) print_help; exit ;;
-      conf          ) shift; conf_self "${@}"; exit ;;
+      -\?|-h|--help ) print_help; return 0 ;;
+      conf          ) shift; conf_self "${@}"; return 0 ;;
     esac
 
     shift
   done
+
+  return 1
 }
 
 main() {
-  _trap_opts "${@}"
+  _trap_opts "${@}" && exit
 
   run_self_remotely
 
