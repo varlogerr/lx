@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # {{ CONFBLOCK }}
-  declare DEST=root@192.168.69.5
+  declare DEST=root@192.168.69.95
 
   declare -A CT_CONF_AXWAY_INT1
   ##################
@@ -95,6 +95,39 @@
   # After hooks, one hook function per line. Launched in the container
   DEFAULT_CT_CONF[after]=''
 # {{/ DEFAULT_BLOCK }}
+
+print_help() {
+  declare the_tool; the_tool="$(basename -- "${0}")"
+
+  echo "
+    USAGE:
+   ,  # Generate self configuration
+   ,  ${the_tool} conf CONF_SUFFIX
+   ,
+   ,  # Apply configuration
+   ,  ${the_tool}
+  " | sed -e '/^\s*$/d' -e 's/^\s\+//' -e 's/^,//'
+}
+
+conf_self() {
+  :
+}
+
+declare -A OPTS=(
+  [help]=false
+  [conf]=false
+)
+_iife_opts() {
+  while [[ -n "${1+x}" ]]; do
+    case "${1}" in
+      -\?|-h|--help ) print_help; exit ;;
+      conf          ) shift; conf_self "${@}"; exit ;;
+    esac
+
+    shift
+  done
+}; _iife_opts "${@}"; unset
+
 
 declare CT_CONFDIR=/etc/pve/lxc
 declare TPLS_URL=http://download.proxmox.com/images/system
