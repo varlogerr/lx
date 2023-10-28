@@ -226,7 +226,7 @@ _iife_opts() {
 
     shift
   done
-}; _iife_opts "${@}"; unset
+}; _iife_opts "${@}"; unset _iife_opts
 
 _ct_conf_update() {
   declare -a updates=("${@}")
