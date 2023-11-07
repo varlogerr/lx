@@ -395,9 +395,9 @@ command_demo_conf() {
       DISK=15G
       GATEWAY=192.168.0.1   # Can be overriden by 'net' preset
       IP=192.168.0.69/24
-      # USER_NAME=foo       # Can be overriden by 'user' preset
-      # USER_PASS=qwerty
-      PRESETS=(user docker vpn)
+      USER_NAME=foo         # Can be overriden by 'user' preset
+      USER_PASS=qwerty
+      PRESETS=(docker vpn)
     } # HOSTNAME=sendbox.portal.local
   " | text_fmt
 }
