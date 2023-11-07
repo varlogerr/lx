@@ -364,21 +364,24 @@ command_demo_conf() {
       #   search in the \${HOME}/.secrets/lxc directory with the following
       #   precedence: \"\${CONTAINER_ID}.root.pass\", \"master.root.pass\",
       #   \"root.pass\".
-      # * net - same is password, but the searched files are
+      # * net - same as password, but the searched files are
       #   \"\${CONTAINER_ID}.net.sh\", \"master.net.sh\", and \"net.sh\", and their
       #   contents is expected to be of 2 optional variables IP=\"...\" and
       #   GATEWAY=\"...\". You can declare more, but it's it's better to keep the
-      #   convention. It's convenient to declare IP in the container file and GATEWAY
-      #   in 'net.sh' to avoid duplication.
+      #   convention. It's convenient to declare IP in the container file and
+      #   GATEWAY in 'net.sh' to avoid duplication.
       # * net - same as 'password', but the searched files are
       #   \"\${CONTAINER_ID}.net.sh\", \"master.net.sh\", and \"net.sh\", and their
       #   contents is expected to be of 2 optional variables IP=\"...\" and
       #   GATEWAY=\"...\". You can declare more, but it's it's better to keep the
-      #   convention. It's convenient to declare IP in the container file and GATEWAY
-      #   in 'net.sh' to avoid duplication.
-      # * user - same as with 'net'
-      # * docker - TBD
-      # * vpm - TBD
+      #   convention. It's convenient to declare IP in the container file and
+      #   GATEWAY in 'net.sh' to avoid duplication.
+      # * user - same as with 'net', file suffix is \"user.sh\", expected vars are:
+      #   USER_NAME, USER_PASS, USER_GROUP, USER_HOME. USER_PASS value can be
+      #   encrypted or plain text.
+      # * docker - configures the container to work with containers, no additional
+      #   settings on the file system level. It manipulates lxc conf files.
+      # * vpn - same as 'docker', but configures for VPN server.
       #
       NAME=sendbox.portal.local
       ID=169
