@@ -1,21 +1,5 @@
 #!/usr/bin/env bash
 
-# * Secret files are to be stored in /root/.secrets/lxc
-#   * ${ID}.root.pass - root user password for machine ID.
-#     Create with
-#     ```sh
-#     mkdir -p /root/.secrets/lxc
-#     openssl passwd -5 "${PASS}" >/root/.secrets/lxc/${ID}.root.pass
-#     ```
-#     If preset doesn't find ${ID}.root.pass, it falls back to
-#     master.root.pass ang then to master.pass
-#
-# * Each configuration section must:
-#   * start with '\s*{.*'
-#   * end with '}\s\+#\s*HOSTNAME=[^ ]\+\s*'
-# * ID, TEMPLATE, UNPRIVILEGED and STORAGE are
-#   required at creation. First three are immutable
-
 # Templates list:
 TPLS_URL=http://download.proxmox.com/images/system
 
@@ -76,6 +60,36 @@ TPLS_URL=http://download.proxmox.com/images/system
   PRESETS=(password net user docker vpn)
 } # HOSTNAME=servant1.home
 
+{ # Remote launcher
+  # Ensure some hard to reproduce and meaningless first arg for marker
+  [[ -n "${REMOTE_TARGET}" ]] && [[ "${1}" != 'REMOTE_<PjI:cL]E' ]] && {
+      # Launch on remote from local machine
+      REMOTE_ARGS=()
+      for arg in "${@}"; do
+        # shellcheck disable=SC2001
+        REMOTE_ARGS+=("\"$(sed 's/"/\\"/g' <<< "${arg}")\"")
+      done
+
+      # shellcheck disable=SC2016
+      # shellcheck disable=SC1004
+      echo '
+        tmp="$(mktemp)"; chmod 0700 "${tmp}"
+        base64 -d <<< "'"$(base64 -- "${0}")"'" > "${tmp}"
+
+        SHLIB_LOG_PREFIX="'"$(basename -- "${0}"): "'" \
+          "${tmp}" "REMOTE_<PjI:cL]E" '"${REMOTE_ARGS[*]}"'
+        RC=$?
+
+        rm -f "${tmp}"
+        exit ${RC}
+      ' | ssh "${REMOTE_TARGET}" bash -s
+
+      exit
+  }
+
+  [[ "${1}" == 'REMOTE_<PjI:cL]E' ]] && shift
+} # Remote launcher
+
 { # Execute launcher
   TMP_LAUNCHER="$(mktemp)"
   ( chmod 0700 "${TMP_LAUNCHER}"
@@ -84,8 +98,9 @@ TPLS_URL=http://download.proxmox.com/images/system
   )
 
   export TPLS_URL
-  UPSTREAM="${0}" SHLIB_LOG_PREFIX="$(basename -- "${0}"): " \
-    "${TMP_LAUNCHER}" "${@}"; RC=$?
+  UPSTREAM="${0}" SHLIB_LOG_PREFIX="${SHLIB_LOG_PREFIX-$(
+    basename -- "${0}"
+  ): }" "${TMP_LAUNCHER}" "${@}"; RC=$?
   (rm -f "${TMP_LAUNCHER}")
 
   exit ${RC}
@@ -335,8 +350,14 @@ command_demo_conf() {
   done
 
   echo "
+    # Uncomment REMOTE_TARGET to execute the configuration
+    # against remote Proxmox machine
+    #
+    # REMOTE_TARGET=root@192.168.0.96
+
     {
       # Requirements, limitations and guidance:
+      # ======================================
       # * Each configuration block must:
       #   * start with '^\s*{.*$'
       #   * end with '^.*}\s\+#\s*HOSTNAME=[^ ]\+\s*$'
@@ -351,6 +372,8 @@ command_demo_conf() {
       #   * TEMPLATE      - immutable after the container creation
       #   * UNPRIVILEGED  - immutable after the container creation
       #   * ROOT_PASS     - immutable after the container creation
+      * * With any setting but required ones removed or set to empty they won't be
+      *   applied.
       #
       # The basic idea of presets is:
       # * To hide some sensitive information about your infra. Same can be
@@ -358,10 +381,11 @@ command_demo_conf() {
       # * To simplify some configurations
       #
       # Available presets:
+      # =================
       # * password - configure container root password from a file in the
       #   filesystem. When enabled, ROOT_PASS is ignored. The password files
       #   (plain text or encoded with \`openssl passwd -5 \"\${PASS}\"\`) are
-      #   search in the \${HOME}/.secrets/lxc directory with the following
+      #   search in the '${CONF[secret_dir]}' directory with the following
       #   precedence: \"\${CONTAINER_ID}.root.pass\", \"master.root.pass\",
       #   \"root.pass\".
       # * net - same as password, but the searched files are
