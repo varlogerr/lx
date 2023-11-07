@@ -268,6 +268,7 @@ exit # {{ LXC_ACTION /}}
 } # {{ SNIP_SHLIB }}
 
 declare -A CONF; CONF=(
+  # TODO: change to ${HOME}
   [secret_dir]=/root/.secrets/lxc
   [toolname]="$(basename -- "${UPSTREAM}")"
 )
@@ -332,6 +333,70 @@ command_demo_conf() {
     esac
     shift
   done
+
+  echo "
+    {
+      # Requirements, limitations and guidance:
+      # * Each configuration block must:
+      #   * start with '^\s*{.*$'
+      #   * end with '^.*}\s\+#\s*HOSTNAME=[^ ]\+\s*$'
+      # * Variables don't override each other when they are in different blocks
+      #   (see the list of supported vars below).
+      # * Multiple blocks are allowed. That's one of the ways to keep multiple
+      #   configurations in one file.
+      # * Code outside configuration blocks is not evaluated for configuration.
+      #   I.e. you can't factor out a common setting outside a configuration block.
+      # * The following fields are required:
+      #   * ID            - immutable after the container creation
+      #   * TEMPLATE      - immutable after the container creation
+      #   * UNPRIVILEGED  - immutable after the container creation
+      #   * ROOT_PASS     - immutable after the container creation
+      #
+      # The basic idea of presets is:
+      # * To hide some sensitive information about your infra. Same can be
+      #   easily achieved with \`. <(cat CONTAINER_ID)\`.
+      # * To simplify some configurations
+      #
+      # Available presets:
+      # * password - configure container root password from a file in the
+      #   filesystem. When enabled, ROOT_PASS is ignored. The password files
+      #   (plain text or encoded with \`openssl passwd -5 \"\${PASS}\"\`) are
+      #   search in the \${HOME}/.secrets/lxc directory with the following
+      #   precedence: \"\${CONTAINER_ID}.root.pass\", \"master.root.pass\",
+      #   \"root.pass\".
+      # * net - same is password, but the searched files are
+      #   \"\${CONTAINER_ID}.net.sh\", \"master.net.sh\", and \"net.sh\", and their
+      #   contents is expected to be of 2 optional variables IP=\"...\" and
+      #   GATEWAY=\"...\". You can declare more, but it's it's better to keep the
+      #   convention. It's convenient to declare IP in the container file and GATEWAY
+      #   in 'net.sh' to avoid duplication.
+      # * net - same as 'password', but the searched files are
+      #   \"\${CONTAINER_ID}.net.sh\", \"master.net.sh\", and \"net.sh\", and their
+      #   contents is expected to be of 2 optional variables IP=\"...\" and
+      #   GATEWAY=\"...\". You can declare more, but it's it's better to keep the
+      #   convention. It's convenient to declare IP in the container file and GATEWAY
+      #   in 'net.sh' to avoid duplication.
+      # * user - same as with 'net'
+      # * docker - TBD
+      # * vpm - TBD
+      #
+      NAME=sendbox.portal.local
+      ID=169
+      TEMPLATE=ubuntu-22.04
+      UNPRIVILEGED=1
+      ROOT_PASS=changeme    # Can be overriden by 'password' preset
+      STORAGE=local-lvm
+      ONBOOT=1
+      CORES=4
+      MEMORY=4096
+      DISK=15G
+      GATEWAY=192.168.0.1   # Can be overriden by 'net' preset
+      IP=192.168.0.69/24
+      # USER_NAME=foo       # Can be overriden by 'user' preset
+      # USER_PASS=qwerty
+      PRESETS=(user docker vpn)
+    } # HOSTNAME=sendbox.portal.local
+  " | text_fmt
 }
 
 parse_command "${@}" || exit
@@ -400,6 +465,8 @@ exit
 
 { # Presets
   preset_password() {
+    unset -v ROOT_PASS
+
     declare pass; pass="$(
       set -x
       cd -- "${CONF[secret_dir]}" && {
@@ -416,7 +483,7 @@ exit
   }
 
   trap_preset() {
-    [[ " ${PRESETS[*]} " == *" ${1} "* ]] || return 0
+    [[ " ${PRESETS[*],,} " == *" ${1,,} "* ]] || return 0
 
     declare callback="preset_${1}"
     "${callback}"
