@@ -7,7 +7,8 @@
 #     mkdir -p /root/.secrets/lxc
 #     openssl passwd -5 "${PASS}" >/root/.secrets/lxc/${ID}.root.pass
 #     ```
-#     If preset doesn't find ${ID}.root.pass, it tries master.root.pass
+#     If preset doesn't find ${ID}.root.pass, it falls back to
+#     master.root.pass ang then to master.pass
 #
 # * Each configuration section must:
 #   * start with '\s*{.*'
@@ -76,18 +77,16 @@ TPLS_URL=http://download.proxmox.com/images/system
 } # HOSTNAME=servant1.home
 
 { # Execute launcher
-  TMP_LAUNCHER="$(set -x; mktemp)"
-  (set -x
-    chmod 0700 "${TMP_LAUNCHER}"
+  TMP_LAUNCHER="$(mktemp)"
+  ( chmod 0700 "${TMP_LAUNCHER}"
     grep -A9999 '.*#\s*{{\s*LXC_ACTION\s*\/}}\s*$' -- "${0}" \
     | sed '1 s/.*/#!\/usr\/bin\/env bash/' | tee -- "${TMP_LAUNCHER}" >/dev/null
   )
 
   export TPLS_URL
-  UPSTREAM="${0}" \
-    SHLIB_LOG_PREFIX="$(basename -- "${0}"): " \
-    "${TMP_LAUNCHER}"; RC=$?
-  (set -x; rm -f "${TMP_LAUNCHER}")
+  UPSTREAM="${0}" SHLIB_LOG_PREFIX="$(basename -- "${0}"): " \
+    "${TMP_LAUNCHER}" "${@}"; RC=$?
+  (rm -f "${TMP_LAUNCHER}")
 
   exit ${RC}
 } # Execute launcher
@@ -268,6 +267,79 @@ exit # {{ LXC_ACTION /}}
   }
 } # {{ SNIP_SHLIB }}
 
+declare -A CONF; CONF=(
+  [secret_dir]=/root/.secrets/lxc
+  [toolname]="$(basename -- "${UPSTREAM}")"
+)
+
+print_help() {
+  echo "
+    Deploy LXC container.
+
+    USAGE:
+      # View command help
+      ${CONF[toolname]} COMMAND --help
+      # Run command
+      ${CONF[toolname]} COMMAND [ARG]...
+
+    COMMANDS:
+      deploy      Deploy lxc containers from deployment configuration
+      demo-conf   Print LXC deployment configuration demo
+      root-pass   Configure root password preset
+      user        Configure user preset
+  " | text_fmt
+}
+
+declare COMMAND
+declare COMMAND_FUNC
+declare -A COMMAND_TO_FNAME=(
+  [deploy]=command_deploy
+  [demo-conf]=command_demo_conf
+  [root-pass]=command_root_pass
+  [user]=command_user
+)
+parse_command() {
+  case "${1}" in
+    -\?|-h|--help ) print_help; exit ;;
+    *             ) COMMAND="${1}" ;;
+  esac
+
+  [[ -n "${1+x}" ]] || {
+    log_fuck <<< "COMMAND required."
+    echo; print_help; return 2
+  }
+
+  [[ -n "${COMMAND_TO_FNAME[${COMMAND}]+x}" ]] || {
+    log_fuck <<< "Unsupported COMMAND: '${COMMAND}'."
+    echo; print_help; return 2
+  }
+
+  COMMAND_FUNC="${COMMAND_TO_FNAME[${COMMAND}]}"
+}
+
+print_demo_conf_help() {
+  echo "
+    Print LXC deployment configuration demo to stdout.
+
+    USAGE:
+      ${CONF[toolname]} ${COMMAND}
+  " | text_fmt
+}
+command_demo_conf() {
+  while [[ -n "${1+x}" ]]; do
+    case "${1}" in
+      -\?|-h|--help   ) print_demo_conf_help; exit ;;
+    esac
+    shift
+  done
+}
+
+parse_command "${@}" || exit
+"${COMMAND_FUNC}" "${@:2}"
+
+
+exit
+
 { # Helpers
   download() {
     declare url="${1}"
@@ -326,27 +398,30 @@ exit # {{ LXC_ACTION /}}
   }
 } # Stages
 
-preset_password() {
-  # TODO: Check if it's required by configuration
-  declare pass; pass="$(
-    set -x
-    cd /root/.secrets/lxc && {
-      cat "${ID}.root.pass" || cat "master.root.pass"
+{ # Presets
+  preset_password() {
+    declare pass; pass="$(
+      set -x
+      cd -- "${CONF[secret_dir]}" && {
+        cat -- "${ID}.root.pass" 2>/dev/null \
+        || cat -- "master.root.pass" 2>/dev/null \
+        || cat -- "master.pass" 2>/dev/null
+      }
+    )" || {
+      log_fuck <<< "Can't read password file."
+      return 1
     }
-  )" || {
-    log_fuck <<< "Can't read password."
-    return 1
+
+    ROOT_PASS="${pass}"; return 0
   }
 
-  ROOT_PASS="${pass}"; return 0
-}
+  trap_preset() {
+    [[ " ${PRESETS[*]} " == *" ${1} "* ]] || return 0
 
-trap_preset() {
-  [[ " ${PRESETS[*]} " == *" ${1} "* ]] || return 0
-
-  declare callback="preset_${1}"
-  "${callback}"
-}
+    declare callback="preset_${1}"
+    "${callback}"
+  }
+} # Presets
 
 CONF_PART="$(grep -B999 '.*#\s*{{\s*LXC_ACTION\s*\/}}\s*$' -- "${UPSTREAM}" | sed '$ d')"
 
@@ -382,8 +457,8 @@ pveversion &>/dev/null || { log_fuck <<< "Can't detect PVE."; exit 1; }
     if pct list | sed '1 d' | grep -q "^${id_expr}[^0-9]"; then
       log_info <<< "LXC already exists: '${ID}'."
     else
+      # Exports TPLS_CACHE
       tpl_cache
-
       trap_preset password
 
       (set -x;
