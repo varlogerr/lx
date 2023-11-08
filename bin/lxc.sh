@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# Uncomment and configure REMOTE_TARGET to execute the configuration                                                         [56/56]│ENVAR_INFO_LEVEL=major
+# against remote Proxmox machine                                                                                      │. /opt/varlog/envar/source.bash
+#                                                                                                                     │[kurdupel@PapaDesk ~/Projects/home/toolbox/snippet :dev] SNIP_LOCAL=true ./snippet.sh shlib ./../../lxc/lxc.sh
+# REMOTE_TARGET=root@192.168.0.96
+
 # Templates list:
 TPLS_URL=http://download.proxmox.com/images/system
 
@@ -62,7 +67,7 @@ TPLS_URL=http://download.proxmox.com/images/system
 
 print_dl() {
   [[ "${LXC_LOCAL,,}" =~ ^(true|1|yes|y)$ ]] && {
-    cat -- "$(dirname -- "${0}")/${1}"
+    cat -- "$(dirname -- "${0}")/../${1}"
     return
   }
 
@@ -314,7 +319,7 @@ parse_command() {
 
 print_dl() {
   [[ "${LXC_LOCAL,,}" =~ ^(true|1|yes|y)$ ]] && {
-    cat -- "$(dirname -- "${0}")/${1}"
+    cat -- "$(dirname -- "${UPSTREAM}")/../${1}"
     return
   }
 
@@ -333,10 +338,9 @@ print_dl() {
 parse_command "${@}" || exit
 shift
 
-# inc/cmd/${COMMAND}.sh
-print_dl '...'
-
-"${COMMAND_FUNC}" "${@:2}"
+cmd="$(print_dl "inc/cmd/${COMMAND}.sh")" || exit
+# shellcheck disable=SC1090
+. <(cat <<< "${cmd}")
 
 
 exit
