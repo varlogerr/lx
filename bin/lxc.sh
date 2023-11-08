@@ -71,7 +71,7 @@ print_dl() {
     return
   }
 
-  declare dl_url="https://raw.githubusercontent.com/varlogerr/lx/${LXC_BRANCH-master}/${1}"
+  declare dl_url; dl_url="https://raw.githubusercontent.com/varlogerr/lx/${LXC_BRANCH-master}/${1}?$(date +%s)"
   declare -a dl_tool=(curl -kLsS)
 
   "${dl_tool[@]}" --version &>/dev/null || {
@@ -291,7 +291,6 @@ print_help() {
 }
 
 declare COMMAND
-declare COMMAND_FUNC
 declare -A COMMAND_TO_FNAME=(
   [deploy]=command_deploy
   [demo-conf]=command_demo_conf
@@ -313,8 +312,6 @@ parse_command() {
     log_fuck <<< "Unsupported COMMAND: '${COMMAND}'."
     echo; print_help; return 2
   }
-
-  COMMAND_FUNC="${COMMAND_TO_FNAME[${COMMAND}]}"
 }
 
 print_dl() {
@@ -323,7 +320,7 @@ print_dl() {
     return
   }
 
-  declare dl_url="https://raw.githubusercontent.com/varlogerr/lx/${LXC_BRANCH-master}/${1}"
+  declare dl_url; dl_url="https://raw.githubusercontent.com/varlogerr/lx/${LXC_BRANCH-master}/${1}?$(date +%s)"
   declare -a dl_tool=(curl -kLsS)
 
   "${dl_tool[@]}" --version &>/dev/null || {
