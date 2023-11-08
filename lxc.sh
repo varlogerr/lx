@@ -60,51 +60,31 @@ TPLS_URL=http://download.proxmox.com/images/system
   PRESETS=(password net user docker vpn)
 } # HOSTNAME=servant1.home
 
-{ # Remote launcher
-  # Ensure some hard to reproduce and meaningless first arg for marker
-  [[ -n "${REMOTE_TARGET}" ]] && [[ "${1}" != 'REMOTE_<PjI:cL]E' ]] && {
-      # Launch on remote from local machine
-      REMOTE_ARGS=()
-      for arg in "${@}"; do
-        # shellcheck disable=SC2001
-        REMOTE_ARGS+=("\"$(sed 's/"/\\"/g' <<< "${arg}")\"")
-      done
-
-      # shellcheck disable=SC2016
-      # shellcheck disable=SC1004
-      echo '
-        tmp="$(mktemp)"; chmod 0700 "${tmp}"
-        base64 -d <<< "'"$(base64 -- "${0}")"'" > "${tmp}"
-
-        SHLIB_LOG_PREFIX="'"$(basename -- "${0}"): "'" \
-          "${tmp}" "REMOTE_<PjI:cL]E" '"${REMOTE_ARGS[*]}"'
-        RC=$?
-
-        rm -f "${tmp}"
-        exit ${RC}
-      ' | ssh "${REMOTE_TARGET}" bash -s
-
-      exit
+print_dl() {
+  [[ "${LXC_LOCAL,,}" =~ ^(true|1|yes|y)$ ]] && {
+    cat -- "$(dirname -- "${0}")/${1}"
+    return
   }
 
-  [[ "${1}" == 'REMOTE_<PjI:cL]E' ]] && shift
-} # Remote launcher
+  declare dl_url="https://raw.githubusercontent.com/varlogerr/lx/${LXC_BRANCH-master}/${1}"
+  declare -a dl_tool=(curl -kLsS)
 
-{ # Execute launcher
-  TMP_LAUNCHER="$(mktemp)"
-  ( chmod 0700 "${TMP_LAUNCHER}"
-    grep -A9999 '.*#\s*{{\s*LXC_ACTION\s*\/}}\s*$' -- "${0}" \
-    | sed '1 s/.*/#!\/usr\/bin\/env bash/' | tee -- "${TMP_LAUNCHER}" >/dev/null
-  )
+  "${dl_tool[@]}" --version &>/dev/null || {
+    dl_tool=(wget -qO -); "${dl_tool[@]}" --version &>/dev/null
+  } || {
+    echo "Can't detect download tool." >&2; return 1
+  }
 
-  export TPLS_URL
-  UPSTREAM="${0}" SHLIB_LOG_PREFIX="${SHLIB_LOG_PREFIX-$(
-    basename -- "${0}"
-  ): }" "${TMP_LAUNCHER}" "${@}"; RC=$?
-  (rm -f "${TMP_LAUNCHER}")
+  "${dl_tool[@]}" -- "${dl_url}"
+}
 
-  exit ${RC}
-} # Execute launcher
+inc_remote="$(print_dl inc/target-remote.sh)" || exit
+# shellcheck disable=SC1090
+. <(cat <<< "${inc_remote}")
+
+inc_tmp="$(print_dl inc/target-tmp.sh)" || exit
+# shellcheck disable=SC1090
+. <(cat <<< "${inc_tmp}")
 
 exit # {{ LXC_ACTION /}}
 
@@ -283,7 +263,6 @@ exit # {{ LXC_ACTION /}}
 } # {{ SNIP_SHLIB }}
 
 declare -A CONF; CONF=(
-  # TODO: change to ${HOME}
   [secret_dir]=/root/.secrets/lxc
   [toolname]="$(basename -- "${UPSTREAM}")"
 )
@@ -333,100 +312,30 @@ parse_command() {
   COMMAND_FUNC="${COMMAND_TO_FNAME[${COMMAND}]}"
 }
 
-print_demo_conf_help() {
-  echo "
-    Print LXC deployment configuration demo to stdout.
+print_dl() {
+  [[ "${LXC_LOCAL,,}" =~ ^(true|1|yes|y)$ ]] && {
+    cat -- "$(dirname -- "${0}")/${1}"
+    return
+  }
 
-    USAGE:
-      ${CONF[toolname]} ${COMMAND}
-  " | text_fmt
-}
-command_demo_conf() {
-  while [[ -n "${1+x}" ]]; do
-    case "${1}" in
-      -\?|-h|--help   ) print_demo_conf_help; exit ;;
-    esac
-    shift
-  done
+  declare dl_url="https://raw.githubusercontent.com/varlogerr/lx/${LXC_BRANCH-master}/${1}"
+  declare -a dl_tool=(curl -kLsS)
 
-  echo "
-    # Uncomment REMOTE_TARGET to execute the configuration
-    # against remote Proxmox machine
-    #
-    # REMOTE_TARGET=root@192.168.0.96
+  "${dl_tool[@]}" --version &>/dev/null || {
+    dl_tool=(wget -qO -); "${dl_tool[@]}" --version &>/dev/null
+  } || {
+    echo "Can't detect download tool." >&2; return 1
+  }
 
-    {
-      # Requirements, limitations and guidance:
-      # ======================================
-      # * Each configuration block must:
-      #   * start with '^\s*{.*$'
-      #   * end with '^.*}\s\+#\s*HOSTNAME=[^ ]\+\s*$'
-      # * Variables don't override each other when they are in different blocks
-      #   (see the list of supported vars below).
-      # * Multiple blocks are allowed. That's one of the ways to keep multiple
-      #   configurations in one file.
-      # * Code outside configuration blocks is not evaluated for configuration.
-      #   I.e. you can't factor out a common setting outside a configuration block.
-      # * The following fields are required:
-      #   * ID            - immutable after the container creation
-      #   * TEMPLATE      - immutable after the container creation
-      #   * UNPRIVILEGED  - immutable after the container creation
-      #   * ROOT_PASS     - immutable after the container creation
-      * * With any setting but required ones removed or set to empty they won't be
-      *   applied.
-      #
-      # The basic idea of presets is:
-      # * To hide some sensitive information about your infra. Same can be
-      #   easily achieved with \`. <(cat CONTAINER_ID)\`.
-      # * To simplify some configurations
-      #
-      # Available presets:
-      # =================
-      # * password - configure container root password from a file in the
-      #   filesystem. When enabled, ROOT_PASS is ignored. The password files
-      #   (plain text or encoded with \`openssl passwd -5 \"\${PASS}\"\`) are
-      #   search in the '${CONF[secret_dir]}' directory with the following
-      #   precedence: \"\${CONTAINER_ID}.root.pass\", \"master.root.pass\",
-      #   \"root.pass\".
-      # * net - same as password, but the searched files are
-      #   \"\${CONTAINER_ID}.net.sh\", \"master.net.sh\", and \"net.sh\", and their
-      #   contents is expected to be of 2 optional variables IP=\"...\" and
-      #   GATEWAY=\"...\". You can declare more, but it's it's better to keep the
-      #   convention. It's convenient to declare IP in the container file and
-      #   GATEWAY in 'net.sh' to avoid duplication.
-      # * net - same as 'password', but the searched files are
-      #   \"\${CONTAINER_ID}.net.sh\", \"master.net.sh\", and \"net.sh\", and their
-      #   contents is expected to be of 2 optional variables IP=\"...\" and
-      #   GATEWAY=\"...\". You can declare more, but it's it's better to keep the
-      #   convention. It's convenient to declare IP in the container file and
-      #   GATEWAY in 'net.sh' to avoid duplication.
-      # * user - same as with 'net', file suffix is \"user.sh\", expected vars are:
-      #   USER_NAME, USER_PASS, USER_GROUP, USER_HOME. USER_PASS value can be
-      #   encrypted or plain text.
-      # * docker - configures the container to work with containers, no additional
-      #   settings on the file system level. It manipulates lxc conf files.
-      # * vpn - same as 'docker', but configures for VPN server.
-      #
-      NAME=sendbox.portal.local
-      ID=169
-      TEMPLATE=ubuntu-22.04
-      UNPRIVILEGED=1
-      ROOT_PASS=changeme    # Can be overriden by 'password' preset
-      STORAGE=local-lvm
-      ONBOOT=1
-      CORES=4
-      MEMORY=4096
-      DISK=15G
-      GATEWAY=192.168.0.1   # Can be overriden by 'net' preset
-      IP=192.168.0.69/24
-      USER_NAME=foo         # Can be overriden by 'user' preset
-      USER_PASS=qwerty
-      PRESETS=(docker vpn)
-    } # HOSTNAME=sendbox.portal.local
-  " | text_fmt
+  "${dl_tool[@]}" -- "${dl_url}"
 }
 
 parse_command "${@}" || exit
+shift
+
+# inc/cmd/${COMMAND}.sh
+print_dl '...'
+
 "${COMMAND_FUNC}" "${@:2}"
 
 
