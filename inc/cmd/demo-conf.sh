@@ -15,8 +15,8 @@ while [[ -n "${1+x}" ]]; do
 done
 
 echo "
-  # Uncomment and configure REMOTE_TARGET to execute the configuration                                                         [56/56]│ENVAR_INFO_LEVEL=major
-  # against remote Proxmox machine                                                                                      │. /opt/varlog/envar/source.bash
+  # Uncomment and configure REMOTE_TARGET to execute the configuration
+  # against remote Proxmox machine
   #
   # REMOTE_TARGET=root@192.168.0.96
 
